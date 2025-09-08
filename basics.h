@@ -2,11 +2,11 @@
 // Created by emre on 9/8/25.
 /// Some code about the rotation logic, loading and writing images are copied from ImgToAscii project
 
-#ifndef BLURS_BASICS_H
-#define BLURS_BASICS_H
-
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+
+#ifndef BLURS_BASICS_H
+#define BLURS_BASICS_H
 
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <libexif/exif-data.h>
+#include <iostream>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -25,6 +26,7 @@ private:
     vector <unsigned char> blue_channel;
     string filename;
     int width = 0, height = 0, channels = 3;
+    friend class Blurs;
 
     // Functions regarding orientation problem
     void rotate_channel90CW(vector <unsigned char> &channel_data){
@@ -107,12 +109,33 @@ private:
         }
     }
 
+    void boxBlurHelper(vector<unsigned char> &channel_data, int kernel_size){
+        int margin = (kernel_size-1) / 2;
+        vector <unsigned char> original = channel_data; // to avoid using already changed pixels
+
+        for(int row = margin; row + margin < height; row++){
+            if (row % 50 == 0)
+                cout << "Processing row " << row << " of " << height << endl;
+            else
+                continue;
+            for(int column = margin; column + margin < width; column++){
+                float sum = 0;
+
+                for (int i = -margin; i < (margin+1); i++)
+                    for (int j = -margin; j < (margin+1); j++)
+                        sum += original[(row+i) * width + (column+j)];
+
+                float avg = sum / (kernel_size * kernel_size);
+                // calculated the avg and now place the value to all the pixels
+                channel_data[row* width + column] = avg;
+            }
+        }
+    }
+
 public:
 // MAIN FUNCTIONS
-    void load_image(const string& img_path, int &img_width, int &img_height){
-        unsigned char* data = stbi_load(img_path.c_str(), &img_width, &img_height, &channels, channels);
-        width = img_width;
-        height = img_height;
+    void load_image(const string& img_path){
+        unsigned char* data = stbi_load(img_path.c_str(), &width, &height, &channels, channels);
 
         if (!data)  throw runtime_error("Failed to load the image given: " + string(stbi_failure_reason()));
 
@@ -155,7 +178,15 @@ public:
         return stbi_write_jpg(return_name.c_str(), width, height, channels, image_data.data(), 90) != 0;
     }
 
+    bool boxBlur(int fraction){
+        cout << "Blurring red channel..." << endl;
+        boxBlurHelper(red_channel, fraction);
+        cout << "Blurring green channel..." << endl;
+        boxBlurHelper(green_channel, fraction);
+        cout << "Blurring blue channel..." << endl;
+        boxBlurHelper(blue_channel, fraction);
+        return save_image_as_png();
+    }
 };
-
 
 #endif //BLURS_BASICS_H
