@@ -36,11 +36,10 @@ private:
     void boxBlurHelperHorizontal(vector <unsigned char> &channel_data, int kernel_size);   // two-pass version
     void boxBlurHelperVertical(vector <unsigned char> &channel_data, int kernel_size);
     
-    //TODO function regarding gaussian-blur algorithm
     vector<vector <double>> generateGaussianKernel(double standard_deviation);
     void applyKernel(vector<unsigned char> &channel_data, vector<vector <double>> &kernel);
-    void gaussianBlurHelperHorizontal(vector<unsigned char> &channel_data, double standard_deviation);
-    void gaussianBlurHelperVertical(vector<unsigned char> &channel_data, double standard_deviation);
+    void applyKernelHorizontal(vector<unsigned char> &channel_data, vector<double> &kernel);
+    void applyKernelVertical(vector<unsigned char> &channel_data, vector<double> &kernel);
 
 public:
     // File IO
@@ -54,6 +53,14 @@ public:
     // Gaussian-blur functions
     bool gaussianBlur(double standart_deviation);
     bool gaussianBlurOptimized(double standart_deviation);
+
+    // pipelines
+    void boxBlurPipeline(string img_path, int fraction);
+    void gaussianPipeline(string img_path, double standart_deviation);
+
+    // batch pipelines
+    void batchBoxBlur(string folder_path, int fraction);
+    void batchGaussianBlur(string folder_path, double standard_deviation);
 };
 
 #endif //BLUR_UTILS_H

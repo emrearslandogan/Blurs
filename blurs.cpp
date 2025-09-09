@@ -4,6 +4,7 @@
 #include "blurs.h"
 
 #define PI 3.14159
+namespace fs = std::filesystem;
 
 void blur_utils::rotate_channel90CW(vector <unsigned char> &channel_data){
     vector<unsigned char> rotated(width * height);
@@ -101,7 +102,7 @@ void blur_utils::applyKernel(vector<unsigned char> &channel_data, vector<vector 
         int row_offset = row_point * width;  // calculate once per row
 
         for (int column_point = 0; column_point < width; column_point++){
-            double sum = 0.0;  // this will ve the new pixel value
+            double sum = 0.0;  // this will be the new pixel value
 
             for (int i = -kernel_radius; i <= kernel_radius; i++){
                 int src_x = mirrorIndex(row_point + i, height);
@@ -119,6 +120,50 @@ void blur_utils::applyKernel(vector<unsigned char> &channel_data, vector<vector 
     }
     swap(channel_data, modified_data);
 }
+
+void blur_utils::applyKernelHorizontal(vector<unsigned char> &channel_data, vector<double> &kernel){
+    vector <unsigned char> modified_data(channel_data.size());
+    int kernel_margin = kernel.size() / 2;
+
+    for (int row_point = 0; row_point < height; row_point++){     // for handling the edges, we start from 0,0                    
+        int row_offset = row_point * width;
+        for (int column_point = 0; column_point < width; column_point++){
+            double sum = 0.0;  // this will be the new pixel value
+
+            for (int j = -kernel_margin; j <= kernel_margin; j++){
+                int src_y = mirrorIndex(column_point + j, width);
+                sum += channel_data[row_offset + src_y] * kernel[j + kernel_margin];
+            }
+
+            if (sum < 0) sum = 0;
+            if (sum > 255) sum = 255;
+            modified_data[row_offset + column_point] = static_cast<unsigned char>(sum);
+        }
+    }
+    swap(channel_data, modified_data);
+}
+
+void blur_utils::applyKernelVertical(vector<unsigned char> &channel_data, vector<double> &kernel){
+    vector <unsigned char> modified_data(channel_data.size());
+    int kernel_margin = kernel.size() / 2;
+    for (int row_point = 0; row_point < height; row_point++){     // for handling the edges, we start from 0,0                    
+        int row_offset = row_point * width;
+        for (int column_point = 0; column_point < width; column_point++){
+            double sum = 0.0;  // this will be the new pixel value
+
+            for (int i = -kernel_margin; i <= kernel_margin; i++){
+                int src_x = mirrorIndex(row_point + i, height);
+                sum += channel_data[src_x * width + column_point] * kernel[i + kernel_margin];
+            }
+
+            if (sum < 0) sum = 0;
+            if (sum > 255) sum = 255;
+            modified_data[row_offset + column_point] = static_cast<unsigned char>(sum);
+        }
+    }
+    swap(channel_data, modified_data);
+}
+
 // box blur helpers
 void blur_utils::boxBlurHelper(vector<unsigned char> &channel_data, int kernel_size){
     int margin = (kernel_size-1) / 2;
@@ -209,12 +254,24 @@ vector<vector <double>> blur_utils::generateGaussianKernel(double standard_devia
     return kernel;
 }
 
-void blur_utils::gaussianBlurHelperHorizontal(vector<unsigned char> &channel_data, double standard_deviation){
-    // TODO
-}
+vector<double> generate1DGaussianKernel(double standard_deviation) {
+    unsigned char kernel_radius = ceil(3 * standard_deviation);
+    int kernel_size = 2 * kernel_radius + 1;
 
-void blur_utils::gaussianBlurHelperVertical(vector<unsigned char> &channel_data, double standard_deviation){
-    // TODO
+    vector<double> kernel(kernel_size);
+    double sum = 0.0; 
+
+    for (int i = -kernel_radius; i <= kernel_radius; i++) {
+        double value = (1 / (sqrt(2 * PI) * standard_deviation)) * 
+                       exp(-(i * i) / (2 * standard_deviation * standard_deviation));
+        kernel[i + kernel_radius] = value;
+        sum += value;
+    }
+    
+    for (int i = 0; i < kernel_size; i++)
+        kernel[i] /= sum;
+
+    return kernel;
 }
 
 void blur_utils::load_image(const string& img_path){
@@ -297,19 +354,13 @@ bool blur_utils::boxBlurOptimized(int fraction){
     }
 
     // horizontal pass
-    cout << "Red channel horizontal" << endl;
     boxBlurHelperHorizontal(red_channel, fraction);
-    cout << "Blue channel horizontal" << endl;
     boxBlurHelperHorizontal(green_channel, fraction);
-    cout << "Green channel horizontal" << endl;
     boxBlurHelperHorizontal(blue_channel, fraction);
 
     // vertical pass
-    cout << "Red channel vertical" << endl;
     boxBlurHelperVertical(red_channel, fraction);
-    cout << "Blue channel vertical" << endl;
     boxBlurHelperVertical(green_channel, fraction);
-    cout << "Green channel vertical" << endl;
     boxBlurHelperVertical(blue_channel, fraction);
 
     return save_image_as_jpg();
@@ -338,21 +389,59 @@ bool blur_utils::gaussianBlurOptimized(double standart_deviation){
         standart_deviation = 1.0;
     }
 
+    vector<double> kernel = generate1DGaussianKernel(standart_deviation);
+    cout << "Kernel size for gaussian is: " << kernel.size() << endl;
     // horizontal pass
-    cout << "Red channel horizontal" << endl;
-    boxBlurHelperHorizontal(red_channel, standart_deviation);
-    cout << "Blue channel horizontal" << endl;
-    boxBlurHelperHorizontal(green_channel, standart_deviation);
-    cout << "Green channel horizontal" << endl;
-    boxBlurHelperHorizontal(blue_channel, standart_deviation);
+    applyKernelHorizontal(red_channel, kernel);
+    applyKernelHorizontal(green_channel, kernel);
+    applyKernelHorizontal(blue_channel, kernel);
 
     // vertical pass
-    cout << "Red channel vertical" << endl;
-    boxBlurHelperVertical(red_channel, standart_deviation);
-    cout << "Blue channel vertical" << endl;
-    boxBlurHelperVertical(green_channel, standart_deviation);
-    cout << "Green channel vertical" << endl;
-    boxBlurHelperVertical(blue_channel, standart_deviation);
+    applyKernelVertical(red_channel, kernel);
+    applyKernelVertical(green_channel, kernel);
+    applyKernelVertical(blue_channel, kernel);
 
     return save_image_as_jpg();
+}
+
+void blur_utils::boxBlurPipeline(string img_path, int fraction){
+    load_image(img_path);
+    boxBlurOptimized(fraction);
+    save_image_as_jpg();
+
+    cout << "Created file " << filename << endl;
+}
+
+void blur_utils::gaussianPipeline(string img_path, double standart_deviation){
+    load_image(img_path);
+    gaussianBlurOptimized(standart_deviation);
+    save_image_as_jpg();
+
+    cout << "Created file " << filename << endl;
+}
+
+void blur_utils::batchBoxBlur(string folder_path, int fraction){
+    cout << "Scanning the folder: " << folder_path << endl; 
+    std::vector<std::string> files;
+        for (const auto& entry : fs::directory_iterator(folder_path)) 
+            if (entry.is_regular_file()) 
+                files.push_back(entry.path().string());  
+
+    for (int i = 0; i < files.size(); i++){
+        cout << "Scanning: " << files[i] << endl;
+        boxBlurPipeline(files[i], fraction);
+    } 
+}
+
+void blur_utils::batchGaussianBlur(string folder_path, double standard_deviation){
+    cout << "Scanning the folder: " << folder_path << endl; 
+    std::vector<std::string> files;
+        for (const auto& entry : fs::directory_iterator(folder_path)) 
+            if (entry.is_regular_file()) 
+                files.push_back(entry.path().string());  
+
+    for (int i = 0; i < files.size(); i++){
+        cout << "Scanning: " << files[i] << endl;
+        gaussianPipeline(files[i], standard_deviation);
+    }
 }
