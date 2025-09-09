@@ -85,6 +85,40 @@ void blur_utils::fix_orientation(const char* img_path) {
     }
 }
 
+inline int mirrorIndex(int idx, int limit) {
+    if (idx < 0) return -idx - 1;               // mirror across 0
+    if (idx >= limit) return 2*limit - idx - 1; // mirror across limit-1
+    return idx;
+}
+
+void blur_utils::applyKernel(vector<unsigned char> &channel_data, vector<vector <double>> &kernel){
+    vector <unsigned char> modified_data(channel_data.size());
+    int kernel_radius = kernel.size() / 2;
+
+    for (int row_point = 0; row_point < height; row_point++){     // for handling the edges, we start from 0,0            
+        if (row_point % 50 == 0)
+            std::cout << "Processing row " << row_point << " of " << height << std::endl;
+        int row_offset = row_point * width;  // calculate once per row
+
+        for (int column_point = 0; column_point < width; column_point++){
+            double sum = 0.0;  // this will ve the new pixel value
+
+            for (int i = -kernel_radius; i <= kernel_radius; i++){
+                int src_x = mirrorIndex(row_point + i, height);
+
+                for (int j = -kernel_radius; j <= kernel_radius; j++){
+                    int src_y = mirrorIndex(column_point + j, width);
+                    sum += channel_data[src_x * width + src_y] * kernel[i + kernel_radius][j + kernel_radius];
+                }
+            }
+            
+            if (sum < 0) sum = 0;
+            if (sum > 255) sum = 255;
+            modified_data[row_offset + column_point] = static_cast<unsigned char>(sum);
+        }
+    }
+    swap(channel_data, modified_data);
+}
 // box blur helpers
 void blur_utils::boxBlurHelper(vector<unsigned char> &channel_data, int kernel_size){
     int margin = (kernel_size-1) / 2;
@@ -153,8 +187,26 @@ void blur_utils::boxBlurHelperVertical(vector<unsigned char> &channel_data, int 
 }
 
 // gaussian blur helpers
-void blur_utils::gaussianBlurHelper(vector<unsigned char> &channel_data, double standard_deviation){
-    // TODO
+vector<vector <double>> blur_utils::generateGaussianKernel(double standard_deviation){
+    unsigned char kernel_radius = ceil(3 * standard_deviation);  // this will give %99.7 of the area of the curve
+    int kernel_size = 2 * kernel_radius + 1;
+
+    vector<vector <double>> kernel(kernel_size, vector<double>(kernel_size));
+    double sum = 0.0; // it will be used for normalization
+
+    for (int i = -kernel_radius; i <= kernel_radius; i++)
+        for (int j = -kernel_radius; j <= kernel_radius; j++){
+            double value = (1 / (2 * PI * standard_deviation * standard_deviation)) * 
+                           exp(-(i*i + j*j) / (2 * standard_deviation * standard_deviation));
+            kernel[i + kernel_radius][j + kernel_radius] = value;
+            sum += value;
+        }
+    // normalize the kernel
+    for (int i = 0; i < kernel_size; i++)
+        for (int j = 0; j < kernel_size; j++)
+            kernel[i][j] /= sum;
+
+    return kernel;
 }
 
 void blur_utils::gaussianBlurHelperHorizontal(vector<unsigned char> &channel_data, double standard_deviation){
@@ -268,12 +320,14 @@ bool blur_utils::gaussianBlur(double standart_deviation){
         cout << "Standard deviation must be positive, setting it to 1." << endl;
         standart_deviation = 1.0;
     }
-    cout << "Blurring red channel..." << endl;
-    gaussianBlurHelper(red_channel, standart_deviation);
-    cout << "Blurring green channel..." << endl;
-    gaussianBlurHelper(green_channel, standart_deviation);
-    cout << "Blurring blue channel..." << endl;
-    gaussianBlurHelper(blue_channel, standart_deviation);
+    vector <vector <double>> kernel = generateGaussianKernel(standart_deviation);
+
+    cout << "gauss Blurring red channel..." << endl;
+    applyKernel(red_channel, kernel);
+    cout << "gauss Blurring green channel..." << endl;
+    applyKernel(green_channel, kernel);
+    cout << "gauss Blurring blue channel..." << endl;
+    applyKernel(blue_channel, kernel);
 
     return save_image_as_jpg();
 }

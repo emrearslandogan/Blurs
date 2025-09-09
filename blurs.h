@@ -37,9 +37,10 @@ private:
     void boxBlurHelperVertical(vector <unsigned char> &channel_data, int kernel_size);
     
     //TODO function regarding gaussian-blur algorithm
-    void gaussianBlurHelper(vector <unsigned char> &channel_data, double sigma);
-    void blur_utils::gaussianBlurHelperHorizontal(vector<unsigned char> &channel_data, double standard_deviation);
-    void blur_utils::gaussianBlurHelperVertical(vector<unsigned char> &channel_data, double standard_deviation);
+    vector<vector <double>> generateGaussianKernel(double standard_deviation);
+    void applyKernel(vector<unsigned char> &channel_data, vector<vector <double>> &kernel);
+    void gaussianBlurHelperHorizontal(vector<unsigned char> &channel_data, double standard_deviation);
+    void gaussianBlurHelperVertical(vector<unsigned char> &channel_data, double standard_deviation);
 
 public:
     // File IO
