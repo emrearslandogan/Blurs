@@ -1,0 +1,58 @@
+#ifndef BLUR_UTILS_H
+#define BLUR_UTILS_H
+
+#include "stb_image.h"
+#include "stb_image_write.h"
+#include <filesystem>
+#include <string>
+#include <vector>
+#include <libexif/exif-data.h>
+#include <iostream>
+#include <cmath>
+
+using namespace std;
+
+class blur_utils {
+private:
+    vector <unsigned char> red_channel;
+    vector <unsigned char> green_channel;
+    vector <unsigned char> blue_channel;
+    string filename;
+    int width = 0, height = 0, channels = 3;
+
+    // helper functions for general use
+    // functions regarding orientation problem
+    void rotate_channel90CW(vector <unsigned char> &channel_data);
+    void rotate_channel180(vector <unsigned char> &channel_data);
+    void rotate_channel90CCW(vector <unsigned char> &channel_data);
+    void rotate90CW();
+    void rotate180();
+    void rotate90CCW();
+    static int get_exif_orientation(const char* img_path);
+    void fix_orientation(const char* img_path);
+
+    // functions regarding box-blur algorithm 
+    void boxBlurHelper(vector <unsigned char> &channel_data, int kernel_size);     // Non-optimized version
+    void boxBlurHelperHorizontal(vector <unsigned char> &channel_data, int kernel_size);   // two-pass version
+    void boxBlurHelperVertical(vector <unsigned char> &channel_data, int kernel_size);
+    
+    //TODO function regarding gaussian-blur algorithm
+    void gaussianBlurHelper(vector <unsigned char> &channel_data, double sigma);
+    void blur_utils::gaussianBlurHelperHorizontal(vector<unsigned char> &channel_data, double standard_deviation);
+    void blur_utils::gaussianBlurHelperVertical(vector<unsigned char> &channel_data, double standard_deviation);
+
+public:
+    // File IO
+    void load_image(const string& img_path);
+    bool save_image_as_jpg();
+
+    // Box-blur functions
+    bool boxBlur(int fraction);
+    bool boxBlurOptimized(int fraction);
+
+    // Gaussian-blur functions
+    bool gaussianBlur(double standart_deviation);
+    bool gaussianBlurOptimized(double standart_deviation);
+};
+
+#endif //BLUR_UTILS_H
